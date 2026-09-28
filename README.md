@@ -1,43 +1,22 @@
-# Adult Census Income Classifier
+## Income Classification Project – Summary
 
-## Overview
+**The dataset and problem**
+For this project I used the Adult Census Income dataset from Kaggle (~48,000 rows), which has data from the 1994 US Census — things like age, education, occupation, marital status, hours worked, etc. The goal is to predict whether someone makes more than $50K a year or not. It's a binary classification problem, and one thing that makes it tricky is that the classes aren't balanced — around 76% of people are in the ≤$50K group, so a model could look "accurate" just by guessing that for everyone without actually learning anything useful.
 
-Binary classification project on the Adult Census Income dataset: given a
-person's demographic, educational, and employment attributes, predict whether
-their annual income is above $50,000 or at/below it. The dataset is
-imbalanced (roughly 3-to-1 toward the lower bracket), so F1 is used as the
-primary comparison metric rather than raw accuracy throughout the notebook.
+**What I did**
+I started with EDA to understand the data — checking for missing values, looking at how income splits across the different categories, and getting a feel for which features seemed to matter. From there I built out preprocessing, trained a handful of different models to compare, picked the best one, and saved it so it could be used outside the notebook. I also built a small GUI so you can type in someone's info and get a prediction without touching any code.
 
-## Approach
+**Why I made the choices I did**
+Since the classes are imbalanced, I used F1 score instead of accuracy to compare models — accuracy would've been misleading here.
 
-- Missing categorical values (encoded in the raw data as `"?"`) are kept as
-  an explicit `"Unknown"` category instead of being dropped, since a missing
-  workclass or occupation can itself be informative.
-- `education` is collapsed from 16 raw levels into six ordered attainment
-  bands (`No-HS` through `Grad-Degree`) and ordinal-encoded, since more
-  schooling is a meaningful direction rather than an unordered label.
-- All other categorical fields are one-hot encoded with unseen categories
-  tolerated at inference time, and the four numeric fields are scaled with a
-  median/IQR-based scaler to stay robust to the heavy skew in capital
-  gains/losses.
-- All of the above is expressed as a single `scikit-learn` `ColumnTransformer`
-  inside a `Pipeline`, rather than a set of separate encoder/scaler objects —
-  one fitted object captures the entire preprocessing step.
-- Four classical classifiers (logistic regression, k-NN, random forest,
-  histogram-based gradient boosting) are tuned with grid search under
-  5-fold stratified cross-validation, plus a small PyTorch MLP tuned with
-  Optuna as an additional comparison point.
-- The strongest model on held-out F1 is refit on top of the already-fitted
-  preprocessor and the resulting end-to-end pipeline is the one artifact
-  saved to disk.
+For education, instead of just one-hot encoding all 16 raw categories, I grouped them into 6 ordered levels (like No-HS, HS-Grad, up to Grad-Degree). It made more sense to me to encode this as ordinal rather than treating each level as unrelated, since more education is genuinely "more" in a meaningful direction.
 
-## Files
+I also noticed capital-gain and capital-loss were basically zero for most people but had a few huge outliers, which caused problems for the scaler and made logistic regression struggle to converge. I fixed this by log-transforming those two columns before scaling, which pulled the outliers in without messing up the zeros.
 
-| File | Purpose |
-|---|---|
-| `income_classification.ipynb` | Full EDA → preprocessing → model comparison → save-out workflow |
-| `inference.py` | Loads the saved pipeline and exposes `predict(raw_dict)` |
-| `app_gui.py` | Small Tkinter form for entering a record and seeing the prediction |
-| `artifacts/pipeline.joblib` | Fitted preprocessing + classifier pipeline (created by the notebook) |
-| `artifacts/metadata.joblib` | Education grouping/order and expected feature columns |
+For the actual pipeline, I bundled all the preprocessing steps (encoding + scaling) together with the model into one single scikit-learn Pipeline object, instead of saving separate files for the encoder/scaler/model. This way there's no chance of the preprocessing being slightly different between training and when I actually use the model later.
 
+**How I built it**
+Everything was done in Python using scikit-learn for preprocessing and modeling (GridSearchCV with cross-validation), plus PyTorch and Optuna to try out a neural net as an extra comparison. Pandas/matplotlib/seaborn for the EDA and visualizations, joblib to save the trained pipeline, and Tkinter for a simple desktop GUI. I trained everything on Google Colab and then ran the saved model locally through the GUI.
+
+**Results**
+The tree-based models (Random Forest and Histogram Gradient Boosting) came out on top compared to logistic regression and k-NN — which makes sense since this dataset has a lot of categorical features and non-linear relationships that tree models handle naturally. The neural net I tried did reasonably well too, but not enough better to justify how much more tuning/compute it needed, so I ended up going with the tree-based model as the final choice.
